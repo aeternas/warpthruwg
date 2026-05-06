@@ -1,0 +1,25 @@
+version: '3.8'
+services:
+  amnezia-web-ui:
+    image: alexishw/amneziawg-web-ui:master
+    build: .
+    container_name: amnezia-web-ui
+    ports:
+      - "127.0.0.1:8080:8080/tcp"
+      - "51820:51820/udp"
+    network_mode: host
+    environment:
+      - IP_LIST=127.0.0.1
+      - NGINX_PORT=8080
+      - AUTO_START_SERVERS=true
+      - DEFAULT_MTU=1280
+    volumes:
+      - amnezia-data:/etc/amnezia
+    cap_add:
+      - NET_ADMIN
+      - SYS_MODULE
+    devices:
+      - /dev/net/tun
+    restart: unless-stopped
+volumes:
+ amnezia-data:
