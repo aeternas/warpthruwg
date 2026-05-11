@@ -53,7 +53,9 @@ In bridge mode, the admin panel is bound to `127.0.0.1:8080`.
   default route.
 - The generated rules mark packets by ingress interface name, not by CIDR.
 - In `host` mode the WARP egress rules match WireGuard-style interfaces such as
-  `wg0` and `awg0` via the patterns `wg+` and `awg+`.
+  `wg-d6c0ef` via the patterns `wg-+` and `awg-+`.
+- Avoid broad patterns like `wg+` in host mode, because they also match `wgcf`
+  and can create a routing loop.
 - In `bridge` mode the WARP egress rules match Docker bridge interfaces via
   `docker0` and `br+`.
 - If your setup uses different interfaces, extend

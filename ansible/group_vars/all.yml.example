@@ -22,6 +22,7 @@ wgcf_route_table_id: "51820"
 wgcf_fwmark: "51820"
 
 # Extra interfaces whose traffic should be forwarded out through WARP.
-# In `host` mode the defaults are `wg+` and `awg+`.
+# In `host` mode the defaults are `wg-+` and `awg-+` so they do not match
+# `wgcf` itself.
 # In `bridge` mode the defaults are `docker0` and `br+`.
 amnezia_extra_forward_iface_patterns: []

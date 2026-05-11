@@ -23,8 +23,8 @@
     wgcf_route_table_id: "51820"
     wgcf_fwmark: "51820"
     amnezia_host_forward_iface_patterns:
-      - wg+
-      - awg+
+      - wg-+
+      - awg-+
     amnezia_bridge_forward_iface_patterns:
       - docker0
       - br+
@@ -50,6 +50,17 @@
             )
             + amnezia_extra_forward_iface_patterns
           }}
+
+    - name: Refuse host-mode patterns that would also match wgcf
+      ansible.builtin.assert:
+        that:
+          - wgcf_interface not in wgcf_forward_iface_patterns
+          - "'wg+' not in wgcf_forward_iface_patterns"
+        fail_msg: >-
+          Host-mode forward interface patterns are too broad and would also
+          match {{ wgcf_interface }}. Use a narrower prefix such as `wg-+`, or
+          set the exact Amnezia interface name.
+      when: warpthruwg_mode == 'host'
 
   tasks:
     - name: Install required Ubuntu packages
