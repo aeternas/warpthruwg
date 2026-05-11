@@ -29,7 +29,7 @@ WireGuard interface on an Ubuntu VPS.
 ## Usage
 
 ```bash
-cd /Users/ivangolikov/Development/warpthruwg/ansible
+cd ansible
 cp inventory.ini.example inventory.ini
 mkdir -p group_vars
 cp group_vars/all.yml.example group_vars/all.yml
