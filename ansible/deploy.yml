@@ -88,6 +88,27 @@
         state: present
         reload: true
 
+    - name: Enable IPv6 forwarding by default for newly created interfaces
+      ansible.posix.sysctl:
+        name: net.ipv6.conf.default.forwarding
+        value: "1"
+        state: present
+        reload: true
+
+    - name: Ensure IPv6 is enabled globally on the host
+      ansible.posix.sysctl:
+        name: net.ipv6.conf.all.disable_ipv6
+        value: "0"
+        state: present
+        reload: true
+
+    - name: Ensure IPv6 is enabled by default for newly created interfaces
+      ansible.posix.sysctl:
+        name: net.ipv6.conf.default.disable_ipv6
+        value: "0"
+        state: present
+        reload: true
+
     - name: Allow reverse-path validation to use packet marks
       ansible.posix.sysctl:
         name: net.ipv4.conf.all.src_valid_mark
@@ -116,6 +137,22 @@
         owner: root
         group: root
         mode: "0644"
+
+    - name: Upload custom image Dockerfile
+      ansible.builtin.copy:
+        src: ../wg-easy/Dockerfile
+        dest: "{{ warpthruwg_remote_dir }}/Dockerfile"
+        owner: root
+        group: root
+        mode: "0644"
+
+    - name: Upload custom image patches
+      ansible.builtin.copy:
+        src: ../wg-easy/patches/
+        dest: "{{ warpthruwg_remote_dir }}/patches/"
+        owner: root
+        group: root
+        mode: "0755"
 
     - name: Create WireGuard working directory
       ansible.builtin.file:
@@ -205,6 +242,15 @@
         name: "wg-quick@{{ wgcf_interface }}"
         state: started
         enabled: true
+
+    - name: Build compose image
+      ansible.builtin.command:
+        argv:
+          - docker
+          - compose
+          - build
+      args:
+        chdir: "{{ warpthruwg_remote_dir }}"
 
     - name: Start compose stack
       ansible.builtin.command:

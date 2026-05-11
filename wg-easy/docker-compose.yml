@@ -1,7 +1,7 @@
 version: '3.8'
 services:
   amnezia-web-ui:
-    image: alexishw/amneziawg-web-ui:master
+    image: warpthruwg/amneziawg-web-ui:ipv6
     build: .
     container_name: amnezia-web-ui
     ports:
@@ -12,6 +12,7 @@ services:
       - IP_LIST=127.0.0.1
       - NGINX_PORT=8080
       - AUTO_START_SERVERS=true
+      - DEFAULT_IPV6_SUBNET=fd42:42:42::/64
       - DEFAULT_MTU=1280
     volumes:
       - amnezia-data:/etc/amnezia
