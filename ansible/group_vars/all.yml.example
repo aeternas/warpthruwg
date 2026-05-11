@@ -1,0 +1,28 @@
+---
+# Choose `host` or `bridge`.
+warpthruwg_mode: host
+
+# Override if you want the stack elsewhere on the VPS.
+warpthruwg_remote_dir: /opt/warpthruwg
+
+# Pin or update wgcf release here when needed.
+wgcf_version: "2.2.29"
+
+# Set to true to rebuild /etc/wireguard/wgcf.conf from wgcf again.
+wgcf_force_regenerate: false
+
+# If you already have a Warp+ key, set it here.
+wgcf_license_key: ""
+
+# Set to false if you will place /etc/wireguard/wgcf.conf on the host yourself.
+wgcf_register: true
+
+# Policy routing used to send only Amnezia client traffic through WARP.
+wgcf_route_table_id: "51820"
+wgcf_fwmark: "51820"
+
+# Extra interfaces whose traffic should be forwarded out through WARP.
+# In `host` mode the defaults are `wg-+` and `awg-+` so they do not match
+# `wgcf` itself.
+# In `bridge` mode the defaults are `docker0` and `br+`.
+amnezia_extra_forward_iface_patterns: []

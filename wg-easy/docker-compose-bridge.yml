@@ -1,0 +1,40 @@
+version: '3.8'
+services:
+  amnezia-web-ui:
+    image: warpthruwg/amneziawg-web-ui:ipv6
+    build: .
+    container_name: amnezia-web-ui
+    ports:
+      - "127.0.0.1:8080:8080/tcp"
+      - "51820:51820/udp"
+    environment:
+      - NGINX_PORT=8080
+      - AUTO_START_SERVERS=true
+      - DEFAULT_IPV6_SUBNET=fd42:42:42::/64
+      - DEFAULT_MTU=1280
+    volumes:
+      - amnezia-data:/etc/amnezia
+    cap_add:
+      - NET_ADMIN
+      - SYS_MODULE
+    devices:
+      - /dev/net/tun
+    networks:
+      - amnezia
+    sysctls:
+      - net.ipv4.ip_forward=1
+      - net.ipv4.conf.all.src_valid_mark=1
+      - net.ipv6.conf.all.disable_ipv6=0
+      - net.ipv6.conf.all.forwarding=1
+      - net.ipv6.conf.default.forwarding=1
+    restart: unless-stopped
+networks:
+  amnezia:
+    driver: bridge
+    enable_ipv6: true
+    ipam:
+      config:
+        - subnet: 172.28.20.0/24
+        - subnet: fd42:42:42:20::/64
+volumes:
+ amnezia-data:

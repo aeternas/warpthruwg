@@ -1,0 +1,263 @@
+---
+- name: Deploy warpthruwg stack and wgcf on Ubuntu VPS
+  hosts: all
+  become: true
+  gather_facts: true
+
+  vars:
+    warpthruwg_mode: host
+    warpthruwg_remote_dir: /opt/warpthruwg
+    warpthruwg_compose_sources:
+      host: ../wg-easy/docker-compose.yml
+      bridge: ../wg-easy/docker-compose-bridge.yml
+
+    wgcf_version: "2.2.29"
+    wgcf_download_url: "https://github.com/ViRb3/wgcf/releases/download/v{{ wgcf_version }}/wgcf_{{ wgcf_version }}_linux_amd64"
+    wgcf_bin_path: /usr/local/bin/wgcf
+    wgcf_workdir: /etc/wireguard
+    wgcf_interface: wgcf
+    wgcf_conf_path: "/etc/wireguard/{{ wgcf_interface }}.conf"
+    wgcf_register: true
+    wgcf_force_regenerate: false
+    wgcf_license_key: ""
+    wgcf_route_table_id: "51820"
+    wgcf_fwmark: "51820"
+    amnezia_host_forward_iface_patterns:
+      - wg-+
+      - awg-+
+    amnezia_bridge_forward_iface_patterns:
+      - docker0
+      - br+
+    amnezia_extra_forward_iface_patterns: []
+
+  pre_tasks:
+    - name: Validate selected compose mode
+      ansible.builtin.assert:
+        that:
+          - warpthruwg_mode in warpthruwg_compose_sources
+        fail_msg: "warpthruwg_mode must be one of: {{ warpthruwg_compose_sources.keys() | join(', ') }}"
+
+    - name: Select forward source interface patterns for the chosen mode
+      ansible.builtin.set_fact:
+        wgcf_forward_iface_patterns: >-
+          {{
+            (
+              warpthruwg_mode == 'host'
+            )
+            | ternary(
+              amnezia_host_forward_iface_patterns,
+              amnezia_bridge_forward_iface_patterns
+            )
+            + amnezia_extra_forward_iface_patterns
+          }}
+
+    - name: Refuse host-mode patterns that would also match wgcf
+      ansible.builtin.assert:
+        that:
+          - wgcf_interface not in wgcf_forward_iface_patterns
+          - "'wg+' not in wgcf_forward_iface_patterns"
+        fail_msg: >-
+          Host-mode forward interface patterns are too broad and would also
+          match {{ wgcf_interface }}. Use a narrower prefix such as `wg-+`, or
+          set the exact Amnezia interface name.
+      when: warpthruwg_mode == 'host'
+
+  tasks:
+    - name: Install required Ubuntu packages
+      ansible.builtin.apt:
+        name:
+          - docker.io
+          - docker-compose-v2
+          - iproute2
+          - wireguard-tools
+          - iptables
+        state: present
+        update_cache: true
+
+    - name: Enable IPv4 forwarding on the host
+      ansible.posix.sysctl:
+        name: net.ipv4.ip_forward
+        value: "1"
+        state: present
+        reload: true
+
+    - name: Enable IPv6 forwarding on the host
+      ansible.posix.sysctl:
+        name: net.ipv6.conf.all.forwarding
+        value: "1"
+        state: present
+        reload: true
+
+    - name: Enable IPv6 forwarding by default for newly created interfaces
+      ansible.posix.sysctl:
+        name: net.ipv6.conf.default.forwarding
+        value: "1"
+        state: present
+        reload: true
+
+    - name: Ensure IPv6 is enabled globally on the host
+      ansible.posix.sysctl:
+        name: net.ipv6.conf.all.disable_ipv6
+        value: "0"
+        state: present
+        reload: true
+
+    - name: Ensure IPv6 is enabled by default for newly created interfaces
+      ansible.posix.sysctl:
+        name: net.ipv6.conf.default.disable_ipv6
+        value: "0"
+        state: present
+        reload: true
+
+    - name: Allow reverse-path validation to use packet marks
+      ansible.posix.sysctl:
+        name: net.ipv4.conf.all.src_valid_mark
+        value: "1"
+        state: present
+        reload: true
+
+    - name: Ensure Docker is enabled and started
+      ansible.builtin.service:
+        name: docker
+        state: started
+        enabled: true
+
+    - name: Create remote project directory
+      ansible.builtin.file:
+        path: "{{ warpthruwg_remote_dir }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Upload selected docker compose file
+      ansible.builtin.copy:
+        src: "{{ warpthruwg_compose_sources[warpthruwg_mode] }}"
+        dest: "{{ warpthruwg_remote_dir }}/docker-compose.yml"
+        owner: root
+        group: root
+        mode: "0644"
+
+    - name: Upload custom image Dockerfile
+      ansible.builtin.copy:
+        src: ../wg-easy/Dockerfile
+        dest: "{{ warpthruwg_remote_dir }}/Dockerfile"
+        owner: root
+        group: root
+        mode: "0644"
+
+    - name: Upload custom image patches
+      ansible.builtin.copy:
+        src: ../wg-easy/patches/
+        dest: "{{ warpthruwg_remote_dir }}/patches/"
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Create WireGuard working directory
+      ansible.builtin.file:
+        path: "{{ wgcf_workdir }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "0700"
+
+    - name: Download wgcf binary
+      ansible.builtin.get_url:
+        url: "{{ wgcf_download_url }}"
+        dest: "{{ wgcf_bin_path }}"
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Check whether wgcf config already exists
+      ansible.builtin.stat:
+        path: "{{ wgcf_conf_path }}"
+      register: wgcf_conf_stat
+
+    - name: Require an existing wgcf config when auto-registration is disabled
+      ansible.builtin.assert:
+        that:
+          - wgcf_register or wgcf_conf_stat.stat.exists
+        fail_msg: >-
+          {{ wgcf_conf_path }} is missing. Either keep wgcf_register=true so the
+          playbook can generate it, or place the file on the VPS before running
+          this playbook.
+
+    - name: Register wgcf account when missing
+      ansible.builtin.command:
+        argv:
+          - "{{ wgcf_bin_path }}"
+          - register
+          - --accept-tos
+      args:
+        chdir: "{{ wgcf_workdir }}"
+      when:
+        - wgcf_register
+        - wgcf_force_regenerate or not wgcf_conf_stat.stat.exists
+
+    - name: Attach Warp+ license key when provided
+      ansible.builtin.command:
+        argv:
+          - "{{ wgcf_bin_path }}"
+          - update
+          - --license-key
+          - "{{ wgcf_license_key }}"
+      args:
+        chdir: "{{ wgcf_workdir }}"
+      when:
+        - wgcf_license_key | length > 0
+        - wgcf_force_regenerate or not wgcf_conf_stat.stat.exists
+
+    - name: Generate wgcf profile when needed
+      ansible.builtin.command:
+        argv:
+          - "{{ wgcf_bin_path }}"
+          - generate
+      args:
+        chdir: "{{ wgcf_workdir }}"
+      when:
+        - wgcf_force_regenerate or not wgcf_conf_stat.stat.exists
+
+    - name: Install wgcf WireGuard profile
+      ansible.builtin.copy:
+        src: "{{ wgcf_workdir }}/wgcf-profile.conf"
+        remote_src: true
+        dest: "{{ wgcf_conf_path }}"
+        owner: root
+        group: root
+        mode: "0600"
+      when:
+        - wgcf_force_regenerate or not wgcf_conf_stat.stat.exists
+
+    - name: Manage wgcf interface firewall hooks
+      ansible.builtin.blockinfile:
+        path: "{{ wgcf_conf_path }}"
+        marker: "# {mark} ANSIBLE MANAGED WGCF POLICY ROUTING"
+        insertafter: '^\[Interface\]$'
+        block: "{{ lookup('ansible.builtin.template', 'templates/wgcf-firewall-block.j2') }}"
+
+    - name: Enable and start wg-quick for wgcf
+      ansible.builtin.service:
+        name: "wg-quick@{{ wgcf_interface }}"
+        state: started
+        enabled: true
+
+    - name: Build compose image
+      ansible.builtin.command:
+        argv:
+          - docker
+          - compose
+          - build
+      args:
+        chdir: "{{ warpthruwg_remote_dir }}"
+
+    - name: Start compose stack
+      ansible.builtin.command:
+        argv:
+          - docker
+          - compose
+          - up
+          - -d
+      args:
+        chdir: "{{ warpthruwg_remote_dir }}"
