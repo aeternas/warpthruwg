@@ -15,6 +15,6 @@ cd ansible
 cp inventory.ini.example inventory.ini
 mkdir -p group_vars
 cp group_vars/all.yml.example group_vars/all.yml
-ansible-playbook -i inventory.ini deploy.yml
+ansible-playbook -i inventory.ini deploy.yml -K
 ```
 
